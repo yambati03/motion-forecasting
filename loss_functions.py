@@ -41,7 +41,22 @@ class TerminalPositionLoss(BaseLoss):
     def forward(self, pred_position, target_position):
         return F.mse_loss(pred_position[:, -1, :], target_position[:, -1, :]) + \
                F.mse_loss(pred_position[:, 0, :], target_position[:, 0, :])
+    
+class DeltaLoss(BaseLoss):
+    def __init__(self, base_loss_fn=nn.MSELoss()):
 
+        super(DeltaLoss, self).__init__()
+        self.base_loss_fn = base_loss_fn
+
+    def forward(self, predictions, targets):
+
+        pred_deltas = predictions[:, 1:, :] - predictions[:, :-1, :]  
+        target_deltas = targets[:, 1:, :] - targets[:, :-1, :]
+
+        # Compute the loss on the deltas
+        delta_loss = self.base_loss_fn(pred_deltas, target_deltas)
+        return delta_loss
+    
 # Trajectory loss (combination of different components)
 class TrajectoryLoss(nn.Module):
     def __init__(self, 
@@ -49,12 +64,14 @@ class TrajectoryLoss(nn.Module):
                  use_smoothness_loss=False, 
                  use_terminal_loss=False, 
                  use_time_weighting=False, 
+                 use_delta_loss=False,  # Add this parameter
                  prediction_horizon=10):
         super(TrajectoryLoss, self).__init__()
         self.position_loss = PositionLoss()
         self.velocity_loss = VelocityLoss() if use_velocity_loss else None
         self.smoothness_loss = SmoothnessLoss() if use_smoothness_loss else None
         self.terminal_loss = TerminalPositionLoss() if use_terminal_loss else None
+        self.delta_loss_fn = DeltaLoss(base_loss_fn=nn.MSELoss()) if use_delta_loss else None
         self.use_time_weighting = use_time_weighting
         self.prediction_horizon = prediction_horizon
 
@@ -62,7 +79,8 @@ class TrajectoryLoss(nn.Module):
         if use_time_weighting:
             self.time_weights = torch.arange(1, prediction_horizon + 1).float() / prediction_horizon
 
-    def apply_time_weights(self, loss, device): # Apply time weights
+    def apply_time_weights(self, loss, device):
+        # Apply time weights to the given loss
         weights = self.time_weights.to(device).unsqueeze(0).unsqueeze(2)  # Shape: (1, time_steps, 1)
         return loss * weights
 
@@ -75,6 +93,7 @@ class TrajectoryLoss(nn.Module):
         target_position = targets[:, :, :2]
         target_velocity = targets[:, :, 2:4]
 
+        # Calculate individual loss components
         position_loss = F.mse_loss(pred_position, target_position, reduction='none')
         velocity_loss = F.mse_loss(pred_velocity, target_velocity, reduction='none') if self.velocity_loss else 0
 
@@ -91,9 +110,20 @@ class TrajectoryLoss(nn.Module):
         smoothness_loss = self.smoothness_loss(pred_position) if self.smoothness_loss else 0
         terminal_loss = self.terminal_loss(pred_position, target_position) if self.terminal_loss else 0
 
+        # Delta Loss for relative changes between timesteps
+        delta_loss = self.delta_loss_fn(pred_position, target_position) if self.delta_loss_fn else 0
+
         # Combine all losses
-        total_loss = total_position_loss + total_velocity_loss + smoothness_loss + terminal_loss
+        total_loss = (
+            total_position_loss 
+            + total_velocity_loss 
+            + smoothness_loss 
+            + terminal_loss 
+            + delta_loss
+        )
         return total_loss
+
+
 
 # Loss registry for dynamic selection
 LOSS_REGISTRY = {
@@ -101,6 +131,7 @@ LOSS_REGISTRY = {
     "velocity_loss": VelocityLoss,
     "smoothness_loss": SmoothnessLoss,
     "terminal_position_loss": TerminalPositionLoss,
+    "delta_loss": DeltaLoss,
     "trajectory_loss": TrajectoryLoss,
 }
 
