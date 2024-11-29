@@ -39,8 +39,7 @@ class TerminalPositionLoss(BaseLoss):
         super(TerminalPositionLoss, self).__init__()
 
     def forward(self, pred_position, target_position):
-        return F.mse_loss(pred_position[:, -1, :], target_position[:, -1, :]) + \
-               F.mse_loss(pred_position[:, 0, :], target_position[:, 0, :])
+        return F.mse_loss(pred_position[:, -1, :], target_position[:, -1, :])
     
 class DeltaLoss(BaseLoss):
     def __init__(self, base_loss_fn=nn.MSELoss()):
@@ -65,7 +64,8 @@ class TrajectoryLoss(nn.Module):
                  use_terminal_loss=False, 
                  time_weighting_scheme=None,
                  use_delta_loss=False, 
-                 prediction_horizon=10):
+                 prediction_horizon=10,
+                 loss_weights=None):
         super(TrajectoryLoss, self).__init__()
         self.position_loss = PositionLoss()
         self.velocity_loss = VelocityLoss() if use_velocity_loss else None
@@ -75,14 +75,22 @@ class TrajectoryLoss(nn.Module):
         self.time_weighting_scheme = time_weighting_scheme
         self.prediction_horizon = prediction_horizon
 
+        #Initialize loss weights - defaults to all weights = 1.0
+        self.loss_weights = loss_weights if loss_weights else {
+            "position_loss": 1.0,
+            "velocity_loss": 1.0,
+            "smoothness_loss": 1.0,
+            "terminal_loss": 1.0,
+            "delta_loss": 1.0
+        }
         # Precompute time weights if applicable
         self.time_weights = None
         if time_weighting_scheme == "Linear":
-            self.time_weights = torch.linspace(prediction_horizon, 1, prediction_horizon).float() / prediction_horizon # [1.0,0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1]
+            self.time_weights = torch.linspace(prediction_horizon, 1, prediction_horizon).float() / prediction_horizon # [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
         elif time_weighting_scheme == "Exponential":
-            alpha = 0.1  # Adjust alpha to control exponential growth
+            alpha = 0.5  # Adjust alpha to control exponential growth
             self.time_weights = torch.exp(
-                torch.linspace(alpha * (prediction_horizon - 1), 0, prediction_horizon) # [2.459,2.225,2.013,1.822,1.648,1.491,1.349,1.221,1.105,1.0]
+                torch.linspace(alpha * (prediction_horizon - 1), 0, prediction_horizon) # [2.459, 2.225, 2.013, 1.822, 1.648, 1.491, 1.349, 1.221, 1.105, 1.0] (alpha 0.1)
             )
 
     def apply_time_weights(self, loss, device):
@@ -111,14 +119,13 @@ class TrajectoryLoss(nn.Module):
         if self.velocity_loss:
             velocity_loss = self.apply_time_weights(velocity_loss, device)
 
-        total_position_loss = position_loss.mean()
-        total_velocity_loss = velocity_loss.mean() if self.velocity_loss else 0
+        total_position_loss = position_loss.mean() * self.loss_weights["position_loss"]
+        total_velocity_loss = velocity_loss.mean() * self.loss_weights["velocity_loss"] if self.velocity_loss else 0
 
-        smoothness_loss = self.smoothness_loss(pred_position) if self.smoothness_loss else 0
-        terminal_loss = self.terminal_loss(pred_position, target_position) if self.terminal_loss else 0
-
-        delta_loss = self.delta_loss_fn(pred_position, target_position) if self.delta_loss_fn else 0
-
+        smoothness_loss = (self.smoothness_loss(pred_position) * self.loss_weights["smoothness_loss"]) if self.smoothness_loss else 0
+        terminal_loss = (self.terminal_loss(pred_position, target_position) * self.loss_weights["terminal_loss"]) if self.terminal_loss else 0
+        delta_loss = (self.delta_loss_fn(pred_position, target_position) * self.loss_weights["delta_loss"]) if self.delta_loss_fn else 0
+        
         # Combine all losses
         total_loss = (
             total_position_loss 
@@ -129,7 +136,7 @@ class TrajectoryLoss(nn.Module):
         )
         return total_loss
 
-# Loss registry for dynamic selection
+# Loss registry for dynamic selection (Add new loss functions here as created)
 LOSS_REGISTRY = {
     "position_loss": PositionLoss,
     "velocity_loss": VelocityLoss,
