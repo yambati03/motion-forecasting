@@ -126,6 +126,12 @@ class TrajectoryLoss(nn.Module):
         terminal_loss = (self.terminal_loss(pred_position, target_position) * self.loss_weights["terminal_loss"]) if self.terminal_loss else 0
         delta_loss = (self.delta_loss_fn(pred_position, target_position) * self.loss_weights["delta_loss"]) if self.delta_loss_fn else 0
         
+        # print(f"Position Loss: {total_position_loss:.4f}")
+        # print(f"Velocity Loss: {total_velocity_loss:.4f}")
+        # print(f"Smoothness Loss: {smoothness_loss:.4f}")
+        # print(f"Terminal Loss: {terminal_loss:.4f}")
+        # print(f"Delta Loss: {delta_loss:.4f}")
+
         # Combine all losses
         total_loss = (
             total_position_loss 
