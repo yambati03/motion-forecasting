@@ -41,9 +41,16 @@ class TestLossFunctions(unittest.TestCase):
         self.assertAlmostEqual(loss.item(), 1.0, places=3)
 
     def test_delta_loss(self):
-        loss_fn = DeltaLoss(base_loss_fn=torch.nn.MSELoss())
+        loss_fn = DeltaLoss()
         loss = loss_fn(self.pred_position, self.target_position)
-        self.assertAlmostEqual(loss.item(), 0.0, places=3)
+
+        delta_true = self.target_position[:, 1:, :] - self.target_position[:, :-1, :]
+        magnitude_true = torch.norm(delta_true, dim=2).mean().item()
+        cosine_loss = 1.0
+        expected_loss = magnitude_true + loss_fn.lambda_dir * cosine_loss
+
+        self.assertAlmostEqual(loss.item(), expected_loss, places=3)
+
 
     def test_trajectory_loss(self):
         loss_fn = TrajectoryLoss(

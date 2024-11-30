@@ -40,21 +40,29 @@ class TerminalPositionLoss(BaseLoss):
 
     def forward(self, pred_position, target_position):
         return F.mse_loss(pred_position[:, -1, :], target_position[:, -1, :])
-    
+
+#Delta Loss
 class DeltaLoss(BaseLoss):
-    def __init__(self, base_loss_fn=nn.MSELoss()):
-
+    def __init__(self, lambda_dir=1):
         super(DeltaLoss, self).__init__()
-        self.base_loss_fn = base_loss_fn
+        self.lambda_dir = lambda_dir
 
-    def forward(self, predictions, targets):
+    def forward(self, pred_position, true_position):
+        delta_pred = pred_position[:, 1:, :] - pred_position[:, :-1, :]
+        delta_true = true_position[:, 1:, :] - true_position[:, :-1, :]
 
-        pred_deltas = predictions[:, 1:, :] - predictions[:, :-1, :]  
-        target_deltas = targets[:, 1:, :] - targets[:, :-1, :]
+        magnitude_pred = torch.norm(delta_pred, dim=2)
+        magnitude_true = torch.norm(delta_true, dim=2)
+        magnitude_loss = torch.abs(magnitude_pred - magnitude_true).mean()
 
-        # Compute the loss on the deltas
-        delta_loss = self.base_loss_fn(pred_deltas, target_deltas)
+        pred_norm = delta_pred / magnitude_pred.unsqueeze(-1).clamp(min=1e-8)
+        true_norm = delta_true / magnitude_true.unsqueeze(-1).clamp(min=1e-8)
+        cosine_similarity = (pred_norm * true_norm).sum(dim=2)
+        directional_loss = (1 - cosine_similarity).mean()
+
+        delta_loss = magnitude_loss + self.lambda_dir * directional_loss
         return delta_loss
+
     
 # Trajectory loss (combination of different components)
 class TrajectoryLoss(nn.Module):
@@ -71,7 +79,7 @@ class TrajectoryLoss(nn.Module):
         self.velocity_loss = VelocityLoss() if use_velocity_loss else None
         self.smoothness_loss = SmoothnessLoss() if use_smoothness_loss else None
         self.terminal_loss = TerminalPositionLoss() if use_terminal_loss else None
-        self.delta_loss_fn = DeltaLoss(base_loss_fn=nn.MSELoss()) if use_delta_loss else None
+        self.delta_loss_fn = DeltaLoss() if use_delta_loss else None
         self.time_weighting_scheme = time_weighting_scheme
         self.prediction_horizon = prediction_horizon
 
