@@ -34,7 +34,7 @@ def compute_linear_wade(pred_position, y):
 
     return (distances * time_weights).mean().item()
 
-def compute_exponential_wade(pred_position, y, alpha=0.1):
+def compute_exponential_wade(pred_position, y, alpha=0.5):
 
     distances = torch.norm(pred_position - y[:, :, :2], dim=2)
 
