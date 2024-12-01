@@ -14,6 +14,9 @@ __pycache__/
 
 #Temp files
 additional_architectures.ipynb
+Part3_ExternalActors_Architecture.ipynb
+Part3_Original_Features_Architecture.ipynb
+Part3_External_Features_Architecture.ipynb
 
 # Distribution / packaging
 .Python
