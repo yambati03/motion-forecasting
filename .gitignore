@@ -6,6 +6,15 @@ __pycache__/
 # C extensions
 *.so
 
+# Pickle files
+*.pkl
+
+# PTH files
+*.pth
+
+#Temp files
+
+
 # Distribution / packaging
 .Python
 build/
