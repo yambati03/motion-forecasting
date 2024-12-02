@@ -43,9 +43,10 @@ class TerminalPositionLoss(BaseLoss):
 
 #Delta Loss
 class DeltaLoss(BaseLoss):
-    def __init__(self, lambda_dir=1):
+    def __init__(self, lambda_dir=1, use_magnitude_loss=True):
         super(DeltaLoss, self).__init__()
         self.lambda_dir = lambda_dir
+        self.use_magnitude_loss = use_magnitude_loss
 
     def forward(self, pred_position, true_position):
         delta_pred = pred_position[:, 1:, :] - pred_position[:, :-1, :]
@@ -53,7 +54,7 @@ class DeltaLoss(BaseLoss):
 
         magnitude_pred = torch.norm(delta_pred, dim=2)
         magnitude_true = torch.norm(delta_true, dim=2)
-        magnitude_loss = torch.abs(magnitude_pred - magnitude_true).mean()
+        magnitude_loss = torch.abs(magnitude_pred - magnitude_true).mean() if self.use_magnitude_loss else 0
 
         pred_norm = delta_pred / magnitude_pred.unsqueeze(-1).clamp(min=1e-8)
         true_norm = delta_true / magnitude_true.unsqueeze(-1).clamp(min=1e-8)
@@ -73,13 +74,14 @@ class TrajectoryLoss(nn.Module):
                  time_weighting_scheme=None,
                  use_delta_loss=False, 
                  prediction_horizon=10,
-                 loss_weights=None):
+                 loss_weights=None, 
+                 use_magnitude_loss=True):
         super(TrajectoryLoss, self).__init__()
         self.position_loss = PositionLoss()
         self.velocity_loss = VelocityLoss() if use_velocity_loss else None
         self.smoothness_loss = SmoothnessLoss() if use_smoothness_loss else None
         self.terminal_loss = TerminalPositionLoss() if use_terminal_loss else None
-        self.delta_loss_fn = DeltaLoss() if use_delta_loss else None
+        self.delta_loss_fn = DeltaLoss(use_magnitude_loss=use_magnitude_loss) if use_delta_loss else None
         self.time_weighting_scheme = time_weighting_scheme
         self.prediction_horizon = prediction_horizon
 
