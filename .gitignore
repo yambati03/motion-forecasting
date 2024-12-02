@@ -15,9 +15,6 @@ __pycache__/
 # PTH files
 *.pth
 
-#Temp files
-
-
 # Distribution / packaging
 .Python
 build/

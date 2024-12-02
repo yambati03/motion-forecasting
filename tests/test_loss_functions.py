@@ -1,13 +1,14 @@
 import unittest
 import torch
-from loss_functions import (
+from lib.loss_functions import (
     PositionLoss,
     VelocityLoss,
     SmoothnessLoss,
     TerminalPositionLoss,
     DeltaLoss,
-    TrajectoryLoss
+    TrajectoryLoss,
 )
+
 
 class TestLossFunctions(unittest.TestCase):
     def setUp(self):
@@ -16,9 +17,13 @@ class TestLossFunctions(unittest.TestCase):
         self.features = 2
 
         self.pred_position = torch.zeros(self.batch_size, self.timesteps, self.features)
-        self.target_position = torch.ones(self.batch_size, self.timesteps, self.features)
+        self.target_position = torch.ones(
+            self.batch_size, self.timesteps, self.features
+        )
         self.pred_velocity = torch.zeros(self.batch_size, self.timesteps, self.features)
-        self.target_velocity = torch.ones(self.batch_size, self.timesteps, self.features)
+        self.target_velocity = torch.ones(
+            self.batch_size, self.timesteps, self.features
+        )
 
     def test_position_loss(self):
         loss_fn = PositionLoss()
@@ -51,7 +56,6 @@ class TestLossFunctions(unittest.TestCase):
 
         self.assertAlmostEqual(loss.item(), expected_loss, places=3)
 
-
     def test_trajectory_loss(self):
         loss_fn = TrajectoryLoss(
             use_velocity_loss=True,
@@ -63,8 +67,8 @@ class TestLossFunctions(unittest.TestCase):
                 "velocity_loss": 0.5,
                 "smoothness_loss": 0.2,
                 "terminal_loss": 0.7,
-                "delta_loss": 1.5
-            }
+                "delta_loss": 1.5,
+            },
         )
         predictions = torch.zeros(self.batch_size, self.timesteps, self.features)
         targets = torch.ones(self.batch_size, self.timesteps, self.features + 2)
@@ -72,5 +76,6 @@ class TestLossFunctions(unittest.TestCase):
         loss = loss_fn(predictions, targets, last_input_state)
         self.assertTrue(loss.item() >= 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
